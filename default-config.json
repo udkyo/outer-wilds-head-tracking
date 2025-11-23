@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "settings": {
+    "opentrackPort": 5252,
+    "yawSensitivity": 1.0,
+    "pitchSensitivity": 1.0,
+    "rollSensitivity": 1.0
+  }
+}

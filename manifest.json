@@ -1,0 +1,11 @@
+{
+    "filename":  "HeadTracking.dll",
+    "author":  "udkyo",
+    "name":  "Head Tracking",
+    "uniqueName":  "udkyo.HeadTracking",
+    "version":  "1.0.0",
+    "owmlVersion":  "2.9.0",
+    "dependencies":  [
+
+                     ]
+}
