@@ -1,8 +1,6 @@
 # Head Tracking for Outer Wilds
 
-<p align="center">
-  <img src="assets/readme-clip.gif" width="600">
-</p>
+![Mod GIF](assets/readme-clip.gif)
 
 Look around the solar system by moving your head! Turn your real head to peek around the cabin of your ship or gaze up at the stars through your helmet visor. This mod brings immersive head tracking to Outer Wilds.
 
