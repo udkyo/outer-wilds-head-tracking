@@ -18,11 +18,15 @@ Works with your phone, webcam, Tobii eye tracker, or any other tracking device s
 
 ## Installation
 
-### Manual Installation (currently the only option):
+### Using the Outer Wilds Mod Manager (recommended):
 
-> **Note**: This mod is not yet available in the Outer Wilds Mod Manager database. It's pending approval for inclusion.
+1. Open the [Outer Wilds Mod Manager](https://outerwildsmods.com/mod-manager/)
+2. Search for "Head Tracking"
+3. Click Install
 
-1. Download the latest release ZIP from the releases page
+### Manual Installation:
+
+1. Download the latest release ZIP from the [releases page](https://github.com/udkyo/outer-wilds-head-tracking/releases)
 2. Extract it to your `OWML/Mods/` folder
 3. You should see "Head Tracking" in the mod list
 
