@@ -55,7 +55,7 @@ Write-Host "✅ Tag v$Version is available" -ForegroundColor Green
 Write-Host ""
 
 # Step 3: Update manifest.json
-Write-Host "[3/8] Updating manifest.json..." -ForegroundColor Cyan
+Write-Host "[3/8] Checking manifest.json..." -ForegroundColor Cyan
 $manifestPath = "manifest.json"
 if (-not (Test-Path $manifestPath)) {
     Write-Host "❌ ERROR: manifest.json not found" -ForegroundColor Red
@@ -64,11 +64,15 @@ if (-not (Test-Path $manifestPath)) {
 
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 $oldVersion = $manifest.version
-$manifest.version = $Version
-$manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath
 
-Write-Host "  Updated version: $oldVersion → $Version" -ForegroundColor Yellow
-Write-Host "✅ manifest.json updated" -ForegroundColor Green
+if ($oldVersion -eq $Version) {
+    Write-Host "✅ manifest.json already at version $Version" -ForegroundColor Green
+} else {
+    $manifest.version = $Version
+    $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath
+    Write-Host "  Updated version: $oldVersion → $Version" -ForegroundColor Yellow
+    Write-Host "✅ manifest.json updated" -ForegroundColor Green
+}
 Write-Host ""
 
 # Step 4: Update CHANGELOG.md
@@ -192,10 +196,12 @@ Write-Host ""
 # Step 7: Commit changes (if any)
 Write-Host "[7/8] Committing version bump..." -ForegroundColor Cyan
 
-# Check if there are any changes to commit
-$gitStatus = git status --porcelain 2>$null
-if ($gitStatus) {
-    git add manifest.json CHANGELOG.md
+# Stage files first, then check if there are actual changes to commit
+# (handles CRLF normalization where files appear modified but are identical after staging)
+git add manifest.json CHANGELOG.md 2>$null
+
+$stagedChanges = git diff --cached --name-only 2>$null
+if ($stagedChanges) {
     git commit -m "chore: bump version to $Version"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "❌ ERROR: Failed to commit changes" -ForegroundColor Red

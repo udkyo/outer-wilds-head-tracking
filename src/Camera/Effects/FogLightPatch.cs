@@ -4,14 +4,11 @@ using HarmonyLib;
 using HeadTracking.Camera.Utilities;
 using HeadTracking.Camera.Core;
 using Quaternion = UnityCoreModule::UnityEngine.Quaternion;
-using Vector3 = UnityCoreModule::UnityEngine.Vector3;
 
 namespace HeadTracking.Camera.Effects
 {
     /// <summary>
     /// Patches FogLight.UpdateFogLight to remove head tracking during WorldToScreenPoint calculations.
-    /// This fixes Dark Bramble fog lights (anglerfish, eggs) from following head movement.
-    /// FogLight directly calls Camera.WorldToScreenPoint(), bypassing WorldToCanvasPosition.
     /// </summary>
     public static class FogLightPatch
     {
@@ -22,13 +19,13 @@ namespace HeadTracking.Camera.Effects
             var fogLightType = AccessTools.TypeByName("FogLight");
             if (fogLightType == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find FogLight type!");
             }
 
             var updateFogLightMethod = AccessTools.Method(fogLightType, "UpdateFogLight");
             if (updateFogLightMethod == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find FogLight.UpdateFogLight method!");
             }
 
             var prefixMethod = AccessTools.Method(typeof(FogLightPatch), nameof(UpdateFogLight_Prefix));
@@ -36,7 +33,7 @@ namespace HeadTracking.Camera.Effects
 
             if (prefixMethod == null || postfixMethod == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find FogLightPatch prefix/postfix methods!");
             }
 
             harmony.Patch(updateFogLightMethod,
@@ -46,35 +43,21 @@ namespace HeadTracking.Camera.Effects
 
         public static void UpdateFogLight_Prefix()
         {
-            try
-            {
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled()) return;
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled()) return;
 
-                var cameraTransform = SimpleCameraPatch._cameraTransform;
-                var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
-                if (headTracking == Quaternion.identity) return;
+            var cameraTransform = SimpleCameraPatch._cameraTransform;
+            var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
+            if (headTracking == Quaternion.identity) return;
 
-                var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
-                _rotationHelper = CameraRotationHelper.ApplyBaseRotation(cameraTransform, baseRotation, headTracking);
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors - reflection-based patching may fail if game updates
-            }
+            var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
+            _rotationHelper = CameraRotationHelper.ApplyBaseRotation(cameraTransform, baseRotation, headTracking);
         }
 
         public static void UpdateFogLight_Postfix()
         {
-            try
-            {
-                _rotationHelper?.Dispose();
-                _rotationHelper = null;
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors - don't crash if rotation restore fails
-            }
+            _rotationHelper?.Dispose();
+            _rotationHelper = null;
         }
     }
 }

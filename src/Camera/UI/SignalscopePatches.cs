@@ -21,7 +21,7 @@ namespace HeadTracking.Camera.UI
             var signalscopeType = AccessTools.TypeByName("Signalscope");
             if (signalscopeType == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find Signalscope type!");
             }
 
             PatchSignalscopeUpdate(harmony, signalscopeType);
@@ -31,101 +31,95 @@ namespace HeadTracking.Camera.UI
         private static void PatchSignalscopeUpdate(Harmony harmony, Type signalscopeType)
         {
             var signalscopeUpdateMethod = AccessTools.Method(signalscopeType, "Update");
-            if (signalscopeUpdateMethod != null)
+            if (signalscopeUpdateMethod == null)
             {
-                var signalscopePrefix = new HarmonyMethod(AccessTools.Method(typeof(SignalscopePatches), nameof(Signalscope_Update_Prefix)));
-                var signalscopePostfix = new HarmonyMethod(AccessTools.Method(typeof(SignalscopePatches), nameof(Signalscope_Update_Postfix)));
-                harmony.Patch(signalscopeUpdateMethod, prefix: signalscopePrefix, postfix: signalscopePostfix);
+                throw new InvalidOperationException("Could not find Signalscope.Update method!");
             }
+
+            var signalscopePrefix = AccessTools.Method(typeof(SignalscopePatches), nameof(Signalscope_Update_Prefix));
+            var signalscopePostfix = AccessTools.Method(typeof(SignalscopePatches), nameof(Signalscope_Update_Postfix));
+
+            if (signalscopePrefix == null || signalscopePostfix == null)
+            {
+                throw new InvalidOperationException("Could not find SignalscopePatches prefix/postfix methods!");
+            }
+
+            harmony.Patch(signalscopeUpdateMethod, prefix: new HarmonyMethod(signalscopePrefix), postfix: new HarmonyMethod(signalscopePostfix));
         }
 
         private static void PatchGetScopeDirection(Harmony harmony, Type signalscopeType)
         {
             var getScopeDirectionMethod = AccessTools.Method(signalscopeType, "GetScopeDirection");
-            if (getScopeDirectionMethod != null)
+            if (getScopeDirectionMethod == null)
             {
-                var scopeDirPostfix = new HarmonyMethod(AccessTools.Method(typeof(SignalscopePatches), nameof(Signalscope_GetScopeDirection_Postfix)));
-                harmony.Patch(getScopeDirectionMethod, postfix: scopeDirPostfix);
+                throw new InvalidOperationException("Could not find Signalscope.GetScopeDirection method!");
             }
+
+            var scopeDirPostfix = AccessTools.Method(typeof(SignalscopePatches), nameof(Signalscope_GetScopeDirection_Postfix));
+            if (scopeDirPostfix == null)
+            {
+                throw new InvalidOperationException("Could not find Signalscope_GetScopeDirection_Postfix method!");
+            }
+
+            harmony.Patch(getScopeDirectionMethod, postfix: new HarmonyMethod(scopeDirPostfix));
         }
 
         public static void Signalscope_Update_Prefix()
         {
-            try
-            {
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled()) return;
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled()) return;
 
-                var cameraTransform = SimpleCameraPatch._cameraTransform;
-                if (cameraTransform == null) return;
+            var cameraTransform = SimpleCameraPatch._cameraTransform;
+            if (cameraTransform == null) return;
 
-                EnsureFrameReset();
+            EnsureFrameReset();
 
-                if (MapMarkerPatch._cameraHasHeadTracking) return;
+            if (MapMarkerPatch._cameraHasHeadTracking) return;
 
-                var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
-                if (headTracking == Quaternion.identity) return;
+            var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
+            if (headTracking == Quaternion.identity) return;
 
-                _signalscopeSavedRotation = cameraTransform.localRotation;
-                cameraTransform.localRotation = _signalscopeSavedRotation * headTracking;
-                _signalscopeRotationModified = true;
-                MapMarkerPatch._cameraHasHeadTracking = true;
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors - reflection-based patching may fail if game updates
-            }
+            _signalscopeSavedRotation = cameraTransform.localRotation;
+            cameraTransform.localRotation = _signalscopeSavedRotation * headTracking;
+            _signalscopeRotationModified = true;
+            MapMarkerPatch._cameraHasHeadTracking = true;
         }
 
         public static void Signalscope_Update_Postfix()
         {
-            try
-            {
-                if (!_signalscopeRotationModified) return;
+            if (!_signalscopeRotationModified) return;
 
-                var cameraTransform = SimpleCameraPatch._cameraTransform;
-                if (cameraTransform == null) return;
+            var cameraTransform = SimpleCameraPatch._cameraTransform;
+            if (cameraTransform == null) return;
 
-                cameraTransform.localRotation = _signalscopeSavedRotation;
-                _signalscopeSavedRotation = Quaternion.identity;
-                _signalscopeRotationModified = false;
-                MapMarkerPatch._cameraHasHeadTracking = false;
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors - don't crash if rotation restore fails
-            }
+            cameraTransform.localRotation = _signalscopeSavedRotation;
+            _signalscopeSavedRotation = Quaternion.identity;
+            _signalscopeRotationModified = false;
+            MapMarkerPatch._cameraHasHeadTracking = false;
         }
 
         public static void Signalscope_GetScopeDirection_Postfix(ref Vector3 __result)
         {
-            try
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled()) return;
+
+            var cameraTransform = SimpleCameraPatch._cameraTransform;
+            if (cameraTransform == null) return;
+
+            var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
+            if (baseRotation == default || baseRotation == Quaternion.identity)
             {
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled()) return;
-
-                var cameraTransform = SimpleCameraPatch._cameraTransform;
-                if (cameraTransform == null) return;
-
-                var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
-                if (baseRotation == default || baseRotation == Quaternion.identity)
-                {
-                    return;
-                }
-
-                var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
-                if (headTracking == Quaternion.identity)
-                {
-                    __result = baseRotation * Vector3.forward;
-                }
-                else
-                {
-                    __result = (baseRotation * headTracking) * Vector3.forward;
-                }
+                return;
             }
-            catch (System.Exception)
+
+            var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
+            if (headTracking == Quaternion.identity)
             {
-                // Silently handle errors - don't crash signalscope if direction calculation fails
+                __result = baseRotation * Vector3.forward;
+            }
+            else
+            {
+                __result = (baseRotation * headTracking) * Vector3.forward;
             }
         }
 

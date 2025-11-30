@@ -82,9 +82,7 @@ If you have a Tobii device (4C, 5, etc.):
 
 1. Install Tobii Game Hub from https://gaming.tobii.com/getstarted/
 2. Make sure your Tobii device is connected
-3. **Important**: Keep "Tobii Experience" running (it detects the hardware) but **close "Tobii Game Hub"** before playing
-   - Why? Game Hub interferes with the tracking data and makes the camera overly sensitive
-4. In OpenTrack:
+3. In OpenTrack:
    - Set **Input** to "Tracker | Tobii"
    - You should see tracking data when you move your head
 
@@ -116,6 +114,7 @@ The first time you look around, press **F8** to center your view. This tells the
 
 - **F8** - Recenter your view (use this whenever things feel off-center)
 - **F9** - Toggle head tracking on/off
+- **Pause menu** - Opening and closing the pause menu will also recenter your view
 
 ### Tips for the Best Experience
 
@@ -135,65 +134,6 @@ The first time you look around, press **F8** to center your view. This tells the
   - When using the model ship (prevents camera lock-ups)
   - When zoomed in with the signalscope (so you can aim precisely)
 - It'll come back on its own when you're done
-
-## Troubleshooting
-
-### Nothing happens when I move my head
-
-**Check OpenTrack:**
-- Is it running with a green "tracking" indicator?
-- Move your head - do the numbers change?
-- Did you click the **Start** button?
-- Is Output set to "UDP over network" with port `5252`?
-
-**Check the game:**
-- Did you launch through OWML? (Check if the OWML console window is open)
-- Press F9 in case you accidentally disabled tracking
-- Press F8 to recenter
-- Check the OWML console for any error messages
-
-**If you're using your phone:**
-- Are your phone and computer on the same WiFi?
-- Did you enter the right IP address?
-- Check Windows Firewall isn't blocking OpenTrack
-- Make sure you set Input to "UDP over network" (not Output - that's different!)
-
-### The camera is shaky or jittery
-
-This is usually fixed with filtering:
-
-1. In OpenTrack, set **Filter** to "Accela"
-2. Click the filter settings button
-3. Increase smoothing to 1.5-2.0
-4. Add a small deadzone (maybe 0.5 degrees)
-
-### The camera is too sensitive or not sensitive enough
-
-1. In OpenTrack, click the **Mapping** button
-2. You'll see curves for Yaw, Pitch, and Roll
-3. Drag the curves to change sensitivity:
-   - Pull them down to make movements smaller
-   - Push them up to make movements bigger
-4. Click OK and test
-
-You can also adjust sensitivity in the mod's config file if you want different sensitivity for each axis.
-
-### Tobii users: The camera spins wildly
-
-If turning your head slightly makes you look all the way behind you:
-
-1. Close "Tobii Game Hub" (but keep "Tobii Experience" running)
-2. Restart OpenTrack
-3. The problem is that Game Hub sends its own tracking data that interferes with OpenTrack
-
-You only need Tobii Experience for hardware detection - Game Hub does something weird resulting in graphical artifacts
-
-### The mod doesn't show up in OWML
-
-1. Make sure you installed it through the OWML mod manager, or
-2. If manual install, check the folder is in `OWML/Mods/` with `manifest.json` inside
-3. Restart OWML
-4. Check the OWML console for errors
 
 ## Building from Source
 

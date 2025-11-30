@@ -23,7 +23,6 @@ namespace HeadTracking.Camera.Core
         private static int _framesWithoutData = 0;
 
         public static Quaternion _lastHeadTrackingRotation = Quaternion.identity;
-        private static Quaternion _lastGameRotation = Quaternion.identity;
         public static Quaternion _baseRotationBeforeHeadTracking = Quaternion.identity;
         public static UnityCoreModule::UnityEngine.Transform? _cameraTransform = null;
 
@@ -39,6 +38,7 @@ namespace HeadTracking.Camera.Core
         private static float _cachedRollOffset = 0f;
         private static float _cachedHeadTrackingInfluence = 1f;
         private static int _lastRotationCalcFrame = -1;
+        private static bool _wasMenuPaused = false;
 
         public static void RecenterTracking()
         {
@@ -49,86 +49,87 @@ namespace HeadTracking.Camera.Core
         [HarmonyPostfix]
         public static void Update_Postfix(PlayerCameraController __instance)
         {
-            try
-            {
-                var cameraTransform = __instance.transform;
-                if (cameraTransform == null) return;
+            var cameraTransform = __instance.transform;
+            if (cameraTransform == null) return;
 
-                _cameraTransform = cameraTransform;
+            _cameraTransform = cameraTransform;
+
+            if (_degreesXField == null || _degreesYField == null)
+            {
+                _degreesXField = AccessTools.Field(typeof(PlayerCameraController), "_degreesX");
+                _degreesYField = AccessTools.Field(typeof(PlayerCameraController), "_degreesY");
 
                 if (_degreesXField == null || _degreesYField == null)
                 {
-                    _degreesXField = AccessTools.Field(typeof(PlayerCameraController), "_degreesX");
-                    _degreesYField = AccessTools.Field(typeof(PlayerCameraController), "_degreesY");
-
-                    if (_degreesXField == null || _degreesYField == null)
-                    {
-                        return;
-                    }
+                    throw new InvalidOperationException("Could not find _degreesX or _degreesY fields on PlayerCameraController");
                 }
-
-                float gameDegreesX = (float)_degreesXField.GetValue(__instance);
-                float gameDegreesY = (float)_degreesYField.GetValue(__instance);
-
-                float deltaX = gameDegreesX - _lastGameDegreesX;
-                float deltaY = gameDegreesY - _lastGameDegreesY;
-                _gameCameraChangeSpeed = UnityCoreModule::UnityEngine.Mathf.Sqrt(deltaX * deltaX + deltaY * deltaY);
-                _lastGameDegreesX = gameDegreesX;
-                _lastGameDegreesY = gameDegreesY;
-
-                var gameWantedRotation = Quaternion.Euler(-gameDegreesY, gameDegreesX, 0f);
-
-                _baseRotationBeforeHeadTracking = cameraTransform.parent != null
-                    ? cameraTransform.parent.rotation * gameWantedRotation
-                    : gameWantedRotation;
-
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled())
-                {
-                    _centerSet = false;
-                    _lastHeadTrackingRotation = Quaternion.identity;
-                    return;
-                }
-
-                var trackingClient = mod.GetTrackingClient();
-                if (trackingClient == null)
-                {
-                    _lastHeadTrackingRotation = Quaternion.identity;
-                    return;
-                }
-
-                int currentFrame = UnityCoreModule::UnityEngine.Time.frameCount;
-                if (MapMarkerPatch._lastDrainedFrame != currentFrame)
-                {
-                    trackingClient.GetRawEulerAngles();
-                    MapMarkerPatch._lastDrainedFrame = currentFrame;
-                }
-
-                var rawAngles = trackingClient.PeekRawEulerAngles();
-
-                HandleTrackingLoss(rawAngles, mod);
-
-                if (!_centerSet)
-                {
-                    if (!rawAngles.IsValid)
-                    {
-                        _lastHeadTrackingRotation = Quaternion.identity;
-                        return;
-                    }
-
-                    SetCenter(rawAngles, mod);
-                    return;
-                }
-
-                ApplyHeadTracking(cameraTransform, gameWantedRotation, rawAngles, mod);
-
-                MapMarkerPatch._headTrackingAppliedFrame = currentFrame;
-                MapMarkerPatch._cameraHasHeadTracking = true;
             }
-            catch (System.Exception)
+
+            float gameDegreesX = (float)_degreesXField.GetValue(__instance);
+            float gameDegreesY = (float)_degreesYField.GetValue(__instance);
+
+            float deltaX = gameDegreesX - _lastGameDegreesX;
+            float deltaY = gameDegreesY - _lastGameDegreesY;
+            _gameCameraChangeSpeed = UnityCoreModule::UnityEngine.Mathf.Sqrt(deltaX * deltaX + deltaY * deltaY);
+            _lastGameDegreesX = gameDegreesX;
+            _lastGameDegreesY = gameDegreesY;
+
+            var gameWantedRotation = Quaternion.Euler(-gameDegreesY, gameDegreesX, 0f);
+
+            _baseRotationBeforeHeadTracking = cameraTransform.parent != null
+                ? cameraTransform.parent.rotation * gameWantedRotation
+                : gameWantedRotation;
+
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled())
             {
-                // Silently handle errors
+                _centerSet = false;
+                _lastHeadTrackingRotation = Quaternion.identity;
+                return;
             }
+
+            // Disable head tracking while game is paused for menu (but not for reading/translator)
+            if (OWTime.IsPaused(OWTime.PauseType.Menu))
+            {
+                _wasMenuPaused = true;  // Track that we were in menu pause (cleared in OnGameUnpaused)
+                _lastHeadTrackingRotation = Quaternion.identity;
+                return;
+            }
+
+            var trackingClient = mod.GetTrackingClient();
+            if (trackingClient == null)
+            {
+                _lastHeadTrackingRotation = Quaternion.identity;
+                return;
+            }
+
+            int currentFrame = UnityCoreModule::UnityEngine.Time.frameCount;
+            if (MapMarkerPatch._lastDrainedFrame != currentFrame)
+            {
+                trackingClient.GetRawEulerAngles();
+                MapMarkerPatch._lastDrainedFrame = currentFrame;
+            }
+
+            var rawAngles = trackingClient.PeekRawEulerAngles();
+
+            HandleTrackingLoss(rawAngles, mod);
+
+            if (!_centerSet)
+            {
+                if (!rawAngles.IsValid)
+                {
+                    _lastHeadTrackingRotation = Quaternion.identity;
+                    return;
+                }
+
+                SetCenter(rawAngles, mod);
+                return;
+            }
+
+            ApplyHeadTracking(cameraTransform, gameWantedRotation, rawAngles, mod);
+
+            MapMarkerPatch._headTrackingAppliedFrame = currentFrame;
+            MapMarkerPatch._cameraHasHeadTracking = true;
         }
 
         /// <summary>
@@ -139,22 +140,15 @@ namespace HeadTracking.Camera.Core
         [HarmonyPrefix]
         public static bool UpdateLockOnTargeting_Prefix(PlayerCameraController __instance)
         {
-            try
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled())
             {
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled())
-                {
-                    return true; // Allow normal lock-on behavior
-                }
+                return true; // Allow normal lock-on behavior
+            }
 
-                // Skip lock-on targeting when head tracking is active
-                // This prevents camera restriction and flickering during conversations
-                return false;
-            }
-            catch (System.Exception)
-            {
-                return true;
-            }
+            // Skip lock-on targeting when head tracking is active
+            // This prevents camera restriction and flickering during conversations
+            return false;
         }
 
         [HarmonyPatch("Start")]
@@ -168,28 +162,29 @@ namespace HeadTracking.Camera.Core
 
             ReticleUpdater.Create();
             UnityCoreModule::UnityEngine.Camera.onPreRender += OnCameraPreRender;
+
+            // Recenter tracking when resuming from pause
+            GlobalMessenger.AddListener("GameUnpaused", OnGameUnpaused);
+        }
+
+        private static void OnGameUnpaused()
+        {
+            // Only recenter when resuming from MENU pause, not Reading pause (translator)
+            // This prevents the camera from jerking when switching between text nodes
+            if (_wasMenuPaused)
+            {
+                _centerSet = false;
+                _wasMenuPaused = false;
+            }
         }
 
         private static void OnCameraPreRender(UnityCoreModule::UnityEngine.Camera cam)
         {
-            try
-            {
-                if (cam != UnityCoreModule::UnityEngine.Camera.main) return;
-                if (_cameraTransform == null) return;
-                if (_lastHeadTrackingRotation == Quaternion.identity) return;
+            if (cam != UnityCoreModule::UnityEngine.Camera.main) return;
+            if (_cameraTransform == null) return;
+            if (_lastHeadTrackingRotation == Quaternion.identity) return;
 
-                ReticleUpdater.GetInstance()?.UpdateReticlePosition();
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors
-            }
-        }
-
-        private static float NormalizeAngle(float angle)
-        {
-            if (angle > 180) angle -= 360;
-            return angle;
+            ReticleUpdater.GetInstance()?.UpdateReticlePosition();
         }
 
         private static void HandleTrackingLoss(OpenTrackClient.RawEulerAngles rawAngles, HeadTrackingMod mod)

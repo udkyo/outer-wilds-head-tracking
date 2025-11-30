@@ -9,13 +9,6 @@ namespace HeadTracking.Camera.Effects
 {
     /// <summary>
     /// Patches Flashlight to prevent flickering when head tracking is active.
-    ///
-    /// Problem: Flashlight.FixedUpdate() reads camera rotation (_root.rotation, _root.up, _root.forward)
-    /// continuously. When other patches temporarily modify camera rotation during their operations,
-    /// the flashlight sees inconsistent rotations and flickers.
-    ///
-    /// Solution: Temporarily restore base rotation (remove head tracking) during FixedUpdate,
-    /// so flashlight always reads consistent camera orientation without head tracking applied.
     /// </summary>
     public static class FlashlightPatch
     {
@@ -26,13 +19,13 @@ namespace HeadTracking.Camera.Effects
             var flashlightType = AccessTools.TypeByName("Flashlight");
             if (flashlightType == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find Flashlight type!");
             }
 
             var fixedUpdateMethod = AccessTools.Method(flashlightType, "FixedUpdate");
             if (fixedUpdateMethod == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find Flashlight.FixedUpdate method!");
             }
 
             var prefixMethod = AccessTools.Method(typeof(FlashlightPatch), nameof(FixedUpdate_Prefix));
@@ -40,7 +33,7 @@ namespace HeadTracking.Camera.Effects
 
             if (prefixMethod == null || postfixMethod == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find FlashlightPatch prefix/postfix methods!");
             }
 
             harmony.Patch(fixedUpdateMethod,
@@ -50,35 +43,21 @@ namespace HeadTracking.Camera.Effects
 
         public static void FixedUpdate_Prefix()
         {
-            try
-            {
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled()) return;
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled()) return;
 
-                var cameraTransform = SimpleCameraPatch._cameraTransform;
-                var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
-                if (headTracking == Quaternion.identity) return;
+            var cameraTransform = SimpleCameraPatch._cameraTransform;
+            var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
+            if (headTracking == Quaternion.identity) return;
 
-                var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
-                _rotationHelper = CameraRotationHelper.ApplyBaseRotation(cameraTransform, baseRotation, headTracking);
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors
-            }
+            var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
+            _rotationHelper = CameraRotationHelper.ApplyBaseRotation(cameraTransform, baseRotation, headTracking);
         }
 
         public static void FixedUpdate_Postfix()
         {
-            try
-            {
-                _rotationHelper?.Dispose();
-                _rotationHelper = null;
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors
-            }
+            _rotationHelper?.Dispose();
+            _rotationHelper = null;
         }
     }
 }

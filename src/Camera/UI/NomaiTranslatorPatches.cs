@@ -22,108 +22,63 @@ namespace HeadTracking.Camera.UI
             var nomaiTranslatorType = AccessTools.TypeByName("NomaiTranslator");
             if (nomaiTranslatorType == null)
             {
-                return;
+                throw new InvalidOperationException("Could not find NomaiTranslator type!");
             }
 
             var translatorUpdateMethod = AccessTools.Method(nomaiTranslatorType, "Update");
-            if (translatorUpdateMethod != null)
+            if (translatorUpdateMethod == null)
             {
-                var translatorPrefix = new HarmonyMethod(AccessTools.Method(typeof(NomaiTranslatorPatches), nameof(NomaiTranslator_Update_Prefix)));
-                var translatorPostfix = new HarmonyMethod(AccessTools.Method(typeof(NomaiTranslatorPatches), nameof(NomaiTranslator_Update_Postfix)));
-                harmony.Patch(translatorUpdateMethod, prefix: translatorPrefix, postfix: translatorPostfix);
+                throw new InvalidOperationException("Could not find NomaiTranslator.Update method!");
             }
+
+            var translatorPrefix = AccessTools.Method(typeof(NomaiTranslatorPatches), nameof(NomaiTranslator_Update_Prefix));
+            var translatorPostfix = AccessTools.Method(typeof(NomaiTranslatorPatches), nameof(NomaiTranslator_Update_Postfix));
+
+            if (translatorPrefix == null || translatorPostfix == null)
+            {
+                throw new InvalidOperationException("Could not find NomaiTranslatorPatches prefix/postfix methods!");
+            }
+
+            harmony.Patch(translatorUpdateMethod,
+                prefix: new HarmonyMethod(translatorPrefix),
+                postfix: new HarmonyMethod(translatorPostfix));
         }
 
         public static void NomaiTranslator_Update_Prefix(object __instance)
         {
-            try
-            {
-                var mod = HeadTrackingMod.Instance;
-                if (mod == null || !mod.IsTrackingEnabled()) return;
+            var mod = HeadTrackingMod.Instance;
+            if (mod == null || !mod.IsTrackingEnabled()) return;
 
-                if (_translatorRaycastTransform == null)
+            if (_translatorRaycastTransform == null)
+            {
+                var raycastField = AccessTools.Field(__instance.GetType(), "_raycastTransform");
+                if (raycastField == null)
                 {
-                    var raycastField = AccessTools.Field(__instance.GetType(), "_raycastTransform");
-                    if (raycastField != null)
-                    {
-                        _translatorRaycastTransform = raycastField.GetValue(__instance) as UnityCoreModule::UnityEngine.Transform;
-                    }
+                    throw new InvalidOperationException("Could not find _raycastTransform field on NomaiTranslator!");
                 }
-
-                if (_translatorRaycastTransform == null) return;
-
-                var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
-                if (headTracking == Quaternion.identity) return;
-
-                var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
-                if (baseRotation == default || baseRotation == Quaternion.identity) return;
-
-                _translatorSavedRotation = _translatorRaycastTransform.rotation;
-                _translatorRaycastTransform.rotation = baseRotation * headTracking;
-                _translatorRotationModified = true;
+                _translatorRaycastTransform = raycastField.GetValue(__instance) as UnityCoreModule::UnityEngine.Transform;
             }
-            catch (System.Exception)
-            {
-                // Silently handle errors - reflection-based patching may fail if game updates
-            }
+
+            if (_translatorRaycastTransform == null) return;
+
+            var headTracking = SimpleCameraPatch._lastHeadTrackingRotation;
+            if (headTracking == Quaternion.identity) return;
+
+            var baseRotation = SimpleCameraPatch._baseRotationBeforeHeadTracking;
+            if (baseRotation == default || baseRotation == Quaternion.identity) return;
+
+            _translatorSavedRotation = _translatorRaycastTransform.rotation;
+            _translatorRaycastTransform.rotation = baseRotation * headTracking;
+            _translatorRotationModified = true;
         }
 
         public static void NomaiTranslator_Update_Postfix()
         {
-            try
-            {
-                if (!_translatorRotationModified) return;
-                if (_translatorRaycastTransform == null) return;
+            if (!_translatorRotationModified) return;
+            if (_translatorRaycastTransform == null) return;
 
-                // Restore the saved rotation
-                _translatorRaycastTransform.rotation = _translatorSavedRotation;
-                _translatorRotationModified = false;
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors - don't crash if rotation restore fails
-            }
+            _translatorRaycastTransform.rotation = _translatorSavedRotation;
+            _translatorRotationModified = false;
         }
-    }
-
-    /// <summary>
-    /// Patches NomaiTranslatorProp to capture canvas reference for head tracking
-    /// </summary>
-    [HarmonyPatch(typeof(NomaiTranslatorProp))]
-    public static class TranslatorCanvasPatch
-    {
-        public static UnityCoreModule::UnityEngine.Transform? _canvasTransform = null;
-
-        [HarmonyPatch("OnEquipTool")]
-        [HarmonyPostfix]
-        public static void OnEquipTool_Postfix(NomaiTranslatorProp __instance)
-        {
-            try
-            {
-                var canvasField = AccessTools.Field(typeof(NomaiTranslatorProp), "_canvas");
-                if (canvasField == null) return;
-
-                var canvas = canvasField.GetValue(__instance);
-                if (canvas == null) return;
-
-                var transformProp = canvas.GetType().GetProperty("transform");
-                if (transformProp != null)
-                {
-                    _canvasTransform = transformProp.GetValue(canvas) as UnityCoreModule::UnityEngine.Transform;
-                }
-            }
-            catch (System.Exception)
-            {
-                // Silently handle errors - reflection-based patching may fail if game updates
-            }
-        }
-
-        [HarmonyPatch("OnFinishUnequipAnimation")]
-        [HarmonyPostfix]
-        public static void OnFinishUnequipAnimation_Postfix()
-        {
-            _canvasTransform = null!;
-        }
-
     }
 }

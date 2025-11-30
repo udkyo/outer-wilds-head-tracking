@@ -1,10 +1,17 @@
 # Changelog
 
-## [1.0.1] - 2025-11-23
+## [1.0.1] - 2025-11-30
+
+### Fixed
+
+- Fix LOOK marker flickering when using head tracking (markers now respond to reticle direction, not head direction)
+- Fix camera jerk when switching between Nomai translator text nodes
+- Disable head tracking while game is paused
+- Recenter head tracking automatically when resuming from pause menu
 
 ### Changed
 
-- fix OpenTrack phone setup instructions
+- Remove dead code and unused methods
 
 ## [1.0.0] - 2025-01-22
 
